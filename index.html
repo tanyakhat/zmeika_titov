@@ -1,0 +1,276 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>Snake Game</title>
+    <style>
+        body {
+            margin: 0;
+            overflow: hidden;
+            background-color: #222;
+        }
+        .snake-part {
+            position: absolute;
+            width: 15px;
+            height: 15px;
+            background-color: lime;
+            border-radius: 50%;
+            pointer-events: none;
+        }
+        .apple {
+            position: absolute;
+            width: 15px;
+            height: 15px;
+            background-color: red;
+            border-radius: 50%;
+        }
+        .bird {
+            position: absolute;
+            width: 20px;
+            height: 20px;
+            background-color: yellow;
+            border-radius: 50%;
+        }
+        .scoreboard, .timer {
+            position: fixed;
+            top: 10px;
+            font-size: 20px;
+            color: white;
+            font-family: Arial, sans-serif;
+        }
+        .scoreboard {
+            left: 10px;
+        }
+        .timer {
+            right: 10px;
+        }
+        .score-table {
+            position: fixed;
+            top: 50%;
+            left: 50%;
+            transform: translate(-50%, -50%);
+            text-align: center;
+            color: white;
+            font-family: Arial, sans-serif;
+            font-size: 20px;
+            z-index: 1001;
+            display: none;
+            background-color: #333;
+            padding: 30px;
+            border-radius: 15px;
+            box-shadow: 0 0 10px rgba(0, 0, 0, 0.5);
+        }
+        .score-table table {
+            width: 100%;
+            margin-top: 20px;
+            border-collapse: collapse;
+        }
+        .score-table th, .score-table td {
+            padding: 15px;
+            border: 1px solid #555;
+        }
+        .score-table th {
+            background-color: #444;
+        }
+        .score-table td {
+            background-color: #555;
+        }
+        .score-table button {
+            margin-top: 20px;
+            padding: 12px 25px;
+            font-size: 18px;
+            background-color: #007bff;
+            border: none;
+            border-radius: 10px;
+            color: white;
+            cursor: pointer;
+            transition: background-color 0.3s;
+        }
+        .score-table button:hover {
+            background-color: #0056b3;
+        }
+    </style>
+</head>
+<body>
+<div class="scoreboard" id="scoreboard">
+    Счёт: 0 | Длина змейки: 5
+</div>
+<div class="timer" id="timer">1:00</div>
+<div class="score-table" id="score-table">
+    <div>Финальный результат</div>
+    <table>
+        <tr>
+            <th>Счёт</th>
+            <th>Длина</th>
+        </tr>
+        <tr>
+            <td id="final-score">0</td>
+            <td id="final-length">0</td>
+        </tr>
+    </table>
+    <button onclick="restartGame()">Начать заново</button>
+</div>
+<div class="apple" id="apple"></div>
+<script>
+    const snakeParts = [];
+    const birds = [];
+    const apple = document.getElementById('apple');
+    const scoreboard = document.getElementById('scoreboard');
+    const timerElement = document.getElementById('timer');
+    const scoreTable = document.getElementById('score-table');
+    const finalScoreElement = document.getElementById('final-score');
+    const finalLengthElement = document.getElementById('final-length');
+    let score = 0;
+    let timer = 60;
+    let snakePositions = [{ x: 300, y: 300 }];
+    let direction = { x: 1, y: 0 }; // Движение вправо
+    let applePosition = placeApple();
+
+    function placeApple() {
+        const x = Math.random() * (window.innerWidth - 20);
+        const y = Math.random() * (window.innerHeight - 20);
+        apple.style.transform = `translate(${x}px, ${y}px)`;
+        return { x, y };
+    }
+
+    function createBird() {
+        const bird = document.createElement('div');
+        bird.className = 'bird';
+        document.body.appendChild(bird);
+        const position = {
+            x: Math.random() * window.innerWidth,
+            y: Math.random() * window.innerHeight
+        };
+        bird.style.transform = `translate(${position.x}px, ${position.y}px)`;
+        birds.push({
+            element: bird,
+            position,
+            direction: {
+                x: Math.random() * 2 - 1,
+                y: Math.random() * 2 - 1
+            }
+        });
+    }
+
+    function moveBirds() {
+        birds.forEach(bird => {
+            bird.position.x += bird.direction.x * 2;
+            bird.position.y += bird.direction.y * 2;
+
+            // Отражение от границ
+            if (bird.position.x < 0 || bird.position.x > window.innerWidth) bird.direction.x *= -1;
+            if (bird.position.y < 0 || bird.position.y > window.innerHeight) bird.direction.y *= -1;
+
+            bird.element.style.transform = `translate(${bird.position.x}px, ${bird.position.y}px)`;
+        });
+    }
+
+    function growSnake() {
+        const newPart = document.createElement('div');
+        newPart.className = 'snake-part';
+        document.body.appendChild(newPart);
+        snakeParts.push(newPart);
+        snakePositions.push({ ...snakePositions[snakePositions.length - 1] });
+    }
+
+    function shrinkSnake() {
+        for (let i = 0; i < 5; i++) {
+            if (snakeParts.length > 0) {
+                const part = snakeParts.pop();
+                part.remove();
+                snakePositions.pop();
+            }
+        }
+    }
+
+    function updateSnake() {
+        snakePositions.unshift({
+            x: snakePositions[0].x + direction.x * 10,
+            y: snakePositions[0].y + direction.y * 10
+        });
+        snakePositions.pop();
+
+        snakeParts.forEach((part, index) => {
+            part.style.transform = `translate(${snakePositions[index].x}px, ${snakePositions[index].y}px)`;
+        });
+    }
+
+    function checkCollision(a, b, distance) {
+        return Math.hypot(a.x - b.x, a.y - b.y) < distance;
+    }
+
+    function handleBirdCollision(bird) {
+        shrinkSnake();
+        score = Math.max(0, score - 10);
+        bird.position.x = Math.random() * window.innerWidth;
+        bird.position.y = Math.random() * window.innerHeight;
+        bird.element.style.transform = `translate(${bird.position.x}px, ${bird.position.y}px)`;
+    }
+
+    function updateScoreboard() {
+        scoreboard.textContent = `Счёт: ${score} | Длина змейки: ${snakeParts.length}`;
+    }
+
+    function endGame() {
+        finalScoreElement.textContent = score;
+        finalLengthElement.textContent = snakeParts.length;
+        scoreTable.style.display = 'block';
+    }
+
+    function restartGame() {
+        window.location.reload();
+    }
+
+    function startTimer() {
+        const interval = setInterval(() => {
+            if (timer <= 0) {
+                clearInterval(interval);
+                endGame();
+            } else {
+                timer--;
+                const minutes = Math.floor(timer / 60);
+                const seconds = timer % 60;
+                timerElement.textContent = `${minutes}:${seconds < 10 ? '0' : ''}${seconds}`;
+            }
+        }, 1000);
+    }
+
+    function gameLoop() {
+        updateSnake();
+        moveBirds();
+
+        // Проверка столкновения с яблоком
+        if (checkCollision(snakePositions[0], applePosition, 15)) {
+            applePosition = placeApple();
+            score++;
+            growSnake();
+            updateScoreboard();
+        }
+
+        // Проверка столкновения с птицами
+        birds.forEach(bird => {
+            if (checkCollision(snakePositions[0], bird.position, 15)) {
+                handleBirdCollision(bird);
+            }
+        });
+    }
+
+    // Управление
+    document.addEventListener('keydown', e => {
+        if (e.key === 'ArrowUp' && direction.y === 0) direction = { x: 0, y: -1 };
+        else if (e.key === 'ArrowDown' && direction.y === 0) direction = { x: 0, y: 1 };
+        else if (e.key === 'ArrowLeft' && direction.x === 0) direction = { x: -1, y: 0 };
+        else if (e.key === 'ArrowRight' && direction.x === 0) direction = { x: 1, y: 0 };
+    });
+
+    // Инициализация игры
+    growSnake();
+    growSnake();
+    growSnake();
+    startTimer();
+    setInterval(gameLoop, 50);
+    setInterval(createBird, 3000); // Создаём птиц каждые 3 секунды
+</script>
+</body>
+</html>
